@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pro Anonimleştirici (Full Stack)</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- SheetJS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f2f5;
+            background-image: radial-gradient(#e5e7eb 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        textarea::-webkit-scrollbar, .result-area::-webkit-scrollbar { width: 8px; }
+        textarea::-webkit-scrollbar-track, .result-area::-webkit-scrollbar-track { background: #f1f1f1; }
+        textarea::-webkit-scrollbar-thumb, .result-area::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        textarea::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        .tool-btn { transition: all 0.2s; }
+        .tool-btn:active { transform: scale(0.95); }
+        
+        .toggle-checkbox:checked { right: 0; border-color: #4f46e5; }
+        .toggle-checkbox:checked + .toggle-label { background-color: #4f46e5; }
+        .toggle-checkbox { right: 16px; transition: all 0.3s; }
+
+        @keyframes fadeInDown {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in { animation: fadeInDown 0.3s ease-out forwards; }
+    </style>
+</head>
+<body class="text-gray-800 min-h-screen flex flex-col">
+
+    <!-- Header -->
+    <header class="bg-indigo-700 text-white shadow-lg p-4 z-10">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-xl md:text-2xl font-bold flex items-center gap-2 tracking-tight">
+                <i class="fa-solid fa-user-secret text-indigo-300"></i> Pro Anonimleştirici
+            </h1>
+            <div class="flex items-center gap-3">
+                <span class="hidden md:inline text-xs bg-indigo-600 border border-indigo-500 px-3 py-1 rounded-full text-indigo-100">
+                    <i class="fa-solid fa-rocket text-xs mr-1"></i> v2.0
+                </span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-grow container mx-auto p-4 md:p-6">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full">
+            
+            <!-- LEFT PANEL: INPUT & SETTINGS -->
+            <div class="glass-panel rounded-xl flex flex-col h-full overflow-hidden relative">
+                <!-- Toolbar Header -->
+                <div class="p-4 bg-gray-50 border-b flex justify-between items-center">
+                    <h2 class="font-semibold text-indigo-700 flex items-center gap-2">
+                        <i class="fa-solid fa-pen-to-square"></i> Veri Girişi
+                    </h2>
+                    <div class="flex gap-2">
+                        <input type="file" id="fileInput" accept=".txt,.csv,.xlsx,.xls" class="hidden" onchange="handleFileUpload(this)">
+                        <button onclick="document.getElementById('fileInput').click()" class="tool-btn text-xs bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 px-3 py-1.5 rounded-md shadow-sm font-medium flex items-center gap-2">
+                            <i class="fa-solid fa-upload"></i> <span class="hidden sm:inline">Dosya Yükle</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Excel Column Selector -->
+                <div id="columnSelectionArea" class="hidden px-4 py-3 bg-blue-50 border-b border-blue-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 animate-fade-in">
+                    <div class="flex items-center gap-2 text-blue-800">
+                        <i class="fa-solid fa-file-excel text-green-600"></i>
+                        <span class="text-xs font-bold uppercase tracking-wide">Excel Algılandı:</span>
+                    </div>
+                    <div class="flex items-center gap-2 w-full sm:w-auto">
+                        <label for="excelColumnSelect" class="text-xs text-blue-700 whitespace-nowrap">İşlenecek Sütun:</label>
+                        <select id="excelColumnSelect" onchange="loadSelectedColumn()" class="text-sm border-blue-300 rounded shadow-sm text-gray-700 focus:ring-blue-500 focus:border-blue-500 p-1.5 bg-white w-full sm:w-48">
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Input Area -->
+                <div class="p-4 flex-grow flex flex-col relative group">
+                    <textarea id="inputNames" class="flex-grow w-full p-4 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none font-mono text-sm bg-white shadow-inner transition-all duration-300" placeholder="İsim listesini buraya yapıştırın veya dosya yükleyin..."></textarea>
+                    
+                    <!-- Text Formatting Toolbar -->
+                    <div class="mt-3 flex flex-wrap items-center justify-between gap-2">
+                        <div class="flex gap-1 flex-wrap">
+                            <!-- Case Tools -->
+                            <div class="flex mr-2 border-r border-gray-300 pr-2 gap-1">
+                                <button onclick="changeCase('upper')" class="tool-btn text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-2 py-1 rounded border border-indigo-200" title="HEPSİ BÜYÜK">AA</button>
+                                <button onclick="changeCase('lower')" class="tool-btn text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-2 py-1 rounded border border-indigo-200" title="hepsi küçük">aa</button>
+                                <button onclick="changeCase('title')" class="tool-btn text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-2 py-1 rounded border border-indigo-200" title="Baş Harf Büyük">Aa</button>
+                            </div>
+                            <!-- Sort & Unique Tools (YENİ) -->
+                            <div class="flex gap-1">
+                                <button onclick="sortInput('asc')" class="tool-btn text-xs bg-orange-50 hover:bg-orange-100 text-orange-700 px-2 py-1 rounded border border-orange-200" title="A'dan Z'ye Sırala"><i class="fa-solid fa-arrow-down-a-z"></i></button>
+                                <button onclick="sortInput('desc')" class="tool-btn text-xs bg-orange-50 hover:bg-orange-100 text-orange-700 px-2 py-1 rounded border border-orange-200" title="Z'den A'ya Sırala"><i class="fa-solid fa-arrow-down-z-a"></i></button>
+                                <button onclick="removeDuplicates()" class="tool-btn text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 px-2 py-1 rounded border border-blue-200" title="Çift Kayıtları Temizle"><i class="fa-solid fa-filter"></i> Tekilleştir</button>
+                            </div>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="fillSampleData()" class="text-xs text-gray-500 hover:text-indigo-600 underline">Örnek</button>
+                            <button onclick="clearInput()" class="text-xs text-red-400 hover:text-red-600 underline">Temizle</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Settings Section -->
+                <div class="bg-gray-50 p-5 border-t border-gray-200 space-y-5">
+                    
+                    <div class="grid grid-cols-2 gap-4">
+                         <div>
+                            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Maske Tipi</label>
+                            <select id="maskChar" class="w-full text-sm p-2 rounded border border-gray-300 bg-white focus:outline-none focus:border-indigo-500">
+                                <option value="*">* (Yıldız)</option>
+                                <option value=".">. (Nokta)</option>
+                                <option value="?">? (Soru)</option>
+                                <option value="x">x (Gizli)</option>
+                                <option value="█">█ (Blok)</option>
+                            </select>
+                         </div>
+                         <div class="flex items-end pb-2">
+                            <div class="flex items-center gap-2 w-full">
+                                <input type="checkbox" id="fixedLengthMask" class="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 cursor-pointer">
+                                <label for="fixedLengthMask" class="text-sm text-gray-700 cursor-pointer select-none">Sabit Uzunluk (***)</label>
+                            </div>
+                         </div>
+                    </div>
+
+                    <div class="space-y-4">
+                        <div class="bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
+                            <div class="flex justify-between mb-2">
+                                <label class="text-sm font-medium text-gray-700">Ad Görünürlüğü</label>
+                                <span id="firstNameVal" class="text-xs font-bold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded">2 Harf</span>
+                            </div>
+                            <input type="range" id="firstNameRange" min="0" max="5" value="2" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600">
+                        </div>
+
+                        <div class="bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
+                            <div class="flex justify-between mb-2">
+                                <label class="text-sm font-medium text-gray-700">Soyad Görünürlüğü</label>
+                                <span id="lastNameVal" class="text-xs font-bold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded">2 Harf</span>
+                            </div>
+                            <input type="range" id="lastNameRange" min="0" max="5" value="2" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div class="flex items-center gap-2 p-2 bg-indigo-50 rounded border border-indigo-100 cursor-pointer hover:bg-indigo-100 transition" onclick="document.getElementById('middleNameFullMask').click()">
+                            <input type="checkbox" id="middleNameFullMask" checked class="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 pointer-events-none">
+                            <label class="text-sm text-gray-700 cursor-pointer pointer-events-none">Ortanca İsim Tam Gizli</label>
+                        </div>
+
+                        <div class="flex items-center justify-between p-2 bg-gray-200 rounded border border-gray-300">
+                            <label for="randomMode" class="text-sm font-bold text-gray-700 cursor-pointer">Rastgele Modu</label>
+                            <div class="relative inline-block w-10 align-middle select-none">
+                                <input type="checkbox" name="randomMode" id="randomMode" class="toggle-checkbox absolute block w-5 h-5 top-0.5 rounded-full bg-white border-2 appearance-none cursor-pointer"/>
+                                <label for="randomMode" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-400 cursor-pointer"></label>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- YOUTUBE LINK AREA -->
+                <div class="p-3 bg-white border-t border-gray-200">
+                    <a href="https://www.youtube.com/@teknolojikcozumvideo" target="_blank" class="flex items-center gap-3 p-3 rounded-lg bg-gradient-to-r from-red-50 to-white border border-red-100 hover:shadow-md transition-all group">
+                        <div class="w-8 h-8 flex items-center justify-center bg-white rounded-full text-red-600 shadow-sm group-hover:scale-110 transition-transform">
+                            <i class="fa-brands fa-youtube text-lg"></i>
+                        </div>
+                        <div class="flex flex-col">
+                            <span class="text-xs font-bold text-gray-800 group-hover:text-red-700">Teknolojik Çözüm Videoları</span>
+                            <span class="text-[10px] text-red-500 font-medium">Kanalı Ziyaret Et &rarr;</span>
+                        </div>
+                    </a>
+                </div>
+
+            </div>
+
+            <!-- RIGHT PANEL: OUTPUT -->
+            <div class="glass-panel rounded-xl flex flex-col h-full overflow-hidden border-t-4 border-green-500 lg:border-t-0 lg:border-l-4 lg:border-green-500">
+                <div class="p-4 bg-gray-50 border-b flex flex-col gap-3">
+                    
+                    <!-- Title & Format Selector (YENİ) -->
+                    <div class="flex flex-col sm:flex-row justify-between items-center gap-2">
+                        <h2 class="font-semibold text-green-700 flex items-center gap-2">
+                            <i class="fa-solid fa-file-shield"></i> Sonuç
+                        </h2>
+                        <div class="flex items-center gap-2">
+                            <label class="text-xs font-semibold text-gray-500">Format:</label>
+                            <select id="outputFormat" onchange="processNames()" class="text-xs border border-gray-300 rounded p-1 text-gray-700 focus:outline-none focus:border-green-500">
+                                <option value="plain">Düz Metin</option>
+                                <option value="sql">SQL Listesi ('X',)</option>
+                                <option value="json">JSON Dizisi ("X",)</option>
+                                <option value="csv">CSV (X;)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="flex flex-wrap gap-2 justify-end">
+                        <button onclick="downloadText()" class="tool-btn text-xs bg-white border border-gray-300 text-gray-600 hover:bg-gray-50 px-3 py-1.5 rounded-md font-medium flex items-center gap-2 shadow-sm">
+                            <i class="fa-solid fa-file-lines"></i> Txt
+                        </button>
+                        <button onclick="downloadExcel()" class="tool-btn text-xs bg-green-50 border border-green-600 text-green-700 hover:bg-green-100 px-3 py-1.5 rounded-md font-medium flex items-center gap-2 shadow-sm">
+                            <i class="fa-solid fa-file-excel"></i> Excel
+                        </button>
+                        <button onclick="copyResult()" id="copyBtn" class="tool-btn text-xs bg-green-600 hover:bg-green-700 text-white px-4 py-1.5 rounded-md font-medium flex items-center gap-2 shadow-sm shadow-green-200">
+                            <i class="fa-regular fa-copy"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="resultArea" class="flex-grow w-full p-4 bg-gray-900 text-green-400 font-mono text-sm md:text-base overflow-y-auto whitespace-pre leading-relaxed select-all">
+                    <!-- Results -->
+                    <span class="text-gray-600 italic select-none">Veri bekleniyor...</span>
+                </div>
+                
+                <div class="p-3 bg-gray-800 border-t border-gray-700 flex justify-between items-center text-xs text-gray-400">
+                    <div id="statsDisplay" class="flex gap-4">
+                        <span><i class="fa-solid fa-list-ol"></i> 0 Satır</span>
+                        <span><i class="fa-solid fa-font"></i> 0 Karakter</span>
+                    </div>
+                    <span class="text-green-600 font-medium animate-pulse hidden" id="processingIndicator">İşleniyor...</span>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <script>
+        // --- Elements ---
+        const inputNames = document.getElementById('inputNames');
+        const resultArea = document.getElementById('resultArea');
+        const statsDisplay = document.getElementById('statsDisplay');
+        const processingIndicator = document.getElementById('processingIndicator');
+        const columnSelectionArea = document.getElementById('columnSelectionArea');
+        const excelColumnSelect = document.getElementById('excelColumnSelect');
+        const outputFormatSelect = document.getElementById('outputFormat'); // YENİ
+        
+        // Settings
+        const firstNameRange = document.getElementById('firstNameRange');
+        const lastNameRange = document.getElementById('lastNameRange');
+        const firstNameVal = document.getElementById('firstNameVal');
+        const lastNameVal = document.getElementById('lastNameVal');
+        const maskCharSelect = document.getElementById('maskChar');
+        const middleNameFullMask = document.getElementById('middleNameFullMask');
+        const fixedLengthMask = document.getElementById('fixedLengthMask');
+        const randomMode = document.getElementById('randomMode');
+
+        let globalExcelData = null;
+
+        // --- Event Listeners ---
+        const inputs = [inputNames, firstNameRange, lastNameRange, maskCharSelect, middleNameFullMask, fixedLengthMask, randomMode, outputFormatSelect];
+        
+        inputs.forEach(input => {
+            input.addEventListener('input', () => {
+                showProcessing();
+                setTimeout(processNames, 50); 
+            });
+        });
+
+        firstNameRange.addEventListener('input', () => firstNameVal.innerText = `${firstNameRange.value} Harf`);
+        lastNameRange.addEventListener('input', () => lastNameVal.innerText = `${lastNameRange.value} Harf`);
+
+        // --- Core Functions ---
+
+        function showProcessing() {
+            processingIndicator.classList.remove('hidden');
+        }
+
+        function processNames() {
+            const rawText = inputNames.value;
+            
+            if (!rawText.trim()) {
+                resultArea.innerHTML = '<span class="text-gray-600 italic select-none">Veri bekleniyor...</span>';
+                updateStats(0, 0);
+                processingIndicator.classList.add('hidden');
+                return;
+            }
+
+            const lines = rawText.split('\n');
+            const format = outputFormatSelect.value; // YENİ: Formatı al
+
+            const processedLines = lines.map(line => {
+                if (!line.trim()) return ''; 
+                
+                // 1. Maskele
+                let masked = maskLine(line.trim());
+
+                // 2. Formatla (YENİ ÖZELLİK)
+                if (masked && !masked.includes("Lütfen işleme devam")) {
+                    if (format === 'sql') return `'${masked}',`;
+                    if (format === 'json') return `"${masked}",`;
+                    if (format === 'csv') return `${masked};`;
+                }
+                
+                return masked;
+            });
+
+            // JSON array ise başa ve sona parantez eklenebilir ama basit tutalım
+            resultArea.innerText = processedLines.join('\n');
+            
+            const nonEmptyLines = lines.filter(l => l.trim().length > 0).length;
+            updateStats(nonEmptyLines, rawText.length);
+            
+            processingIndicator.classList.add('hidden');
+        }
+
+        function updateStats(lines, chars) {
+            statsDisplay.innerHTML = `
+                <span><i class="fa-solid fa-list-ol"></i> ${lines} Satır</span>
+                <span><i class="fa-solid fa-font"></i> ${chars} Karakter</span>
+            `;
+        }
+
+        function maskLine(fullName) {
+            if (fullName.includes("Lütfen işleme devam etmek için")) return fullName;
+
+            const parts = fullName.split(/\s+/);
+            const maskChar = maskCharSelect.value;
+            const isFixed = fixedLengthMask.checked;
+            const isRandom = randomMode.checked;
+            const isMiddleFull = middleNameFullMask.checked;
+
+            let fShow = parseInt(firstNameRange.value);
+            let lShow = parseInt(lastNameRange.value);
+
+            if (isRandom) {
+                fShow = Math.floor(Math.random() * 3) + 1; 
+                lShow = Math.floor(Math.random() * 3) + 1;
+            }
+
+            // 1. Single Name
+            if (parts.length === 1) {
+                return applyMask(parts[0], fShow, maskChar, isFixed);
+            }
+            // 2. First + Last
+            if (parts.length === 2) {
+                const first = applyMask(parts[0], fShow, maskChar, isFixed);
+                const last = applyMask(parts[1], lShow, maskChar, isFixed);
+                return `${first} ${last}`;
+            }
+            // 3. First + Middle + Last
+            if (parts.length === 3) {
+                const first = applyMask(parts[0], fShow, maskChar, isFixed);
+                const last = applyMask(parts[2], lShow, maskChar, isFixed);
+                let middle = "";
+                if (isMiddleFull) {
+                    middle = isFixed ? (maskChar.repeat(3)) : (maskChar.repeat(parts[1].length));
+                } else {
+                    let mShow = isRandom ? Math.floor(Math.random() * 2) : fShow;
+                    middle = applyMask(parts[1], mShow, maskChar, isFixed);
+                }
+                return `${first} ${middle} ${last}`;
+            }
+            // 4. Complex (4+ names)
+            if (parts.length > 3) {
+                const first = applyMask(parts[0], fShow, maskChar, isFixed);
+                const last = applyMask(parts[parts.length - 1], lShow, maskChar, isFixed);
+                const middles = parts.slice(1, parts.length - 1).map(m => {
+                    if (isMiddleFull) {
+                         return isFixed ? (maskChar.repeat(3)) : (maskChar.repeat(m.length));
+                    } else {
+                         return applyMask(m, 1, maskChar, isFixed); 
+                    }
+                });
+                return `${first} ${middles.join(' ')} ${last}`;
+            }
+            return fullName;
+        }
+
+        function applyMask(word, visibleCount, char, isFixed) {
+            if (word.length <= visibleCount) {
+                if(word.length > 1) {
+                    return word.substring(0, 1) + (isFixed ? char.repeat(3) : char.repeat(word.length - 1));
+                }
+                return word;
+            }
+            const prefix = word.substring(0, visibleCount);
+            const suffixLength = word.length - visibleCount;
+            const maskString = isFixed ? char.repeat(3) : char.repeat(suffixLength);
+            return prefix + maskString;
+        }
+
+        // --- File I/O & Excel ---
+
+        function handleFileUpload(input) {
+            const file = input.files[0];
+            if (!file) return;
+
+            const fileName = file.name.toLowerCase();
+
+            if (fileName.endsWith('.xls') || fileName.endsWith('.xlsx')) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, {type: 'array'});
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet, {header: 1});
+                    globalExcelData = jsonData;
+                    populateColumnSelector(jsonData);
+                    inputNames.value = "Excel dosyası başarıyla okundu.\n\nLütfen işleme devam etmek için yukarıdaki 'Excel Algılandı' panelinden bir sütun seçiniz...";
+                    processNames(); 
+                };
+                reader.readAsArrayBuffer(file);
+            } else {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    columnSelectionArea.classList.add('hidden');
+                    globalExcelData = null;
+                    inputNames.value = e.target.result;
+                    processNames();
+                };
+                reader.readAsText(file, "UTF-8");
+            }
+            input.value = '';
+        }
+
+        function populateColumnSelector(data) {
+            if(!data || data.length === 0) return;
+            let maxCols = 0;
+            const checkRows = Math.min(data.length, 5);
+            for(let i=0; i<checkRows; i++){
+                if(data[i] && data[i].length > maxCols) maxCols = data[i].length;
+            }
+            excelColumnSelect.innerHTML = '<option value="-1" selected disabled>-- Sütun Seçiniz --</option>';
+            for (let i = 0; i < maxCols; i++) {
+                const option = document.createElement('option');
+                option.value = i;
+                let headerName = "";
+                if (data[0] && data[0][i]) {
+                    let val = String(data[0][i]);
+                    if(val.length > 20) val = val.substring(0, 17) + "...";
+                    headerName = ` (${val})`;
+                }
+                const colLetter = getExcelColLetter(i);
+                option.text = `Sütun ${colLetter}${headerName}`;
+                excelColumnSelect.appendChild(option);
+            }
+            columnSelectionArea.classList.remove('hidden');
+        }
+
+        function getExcelColLetter(colIndex) {
+            let letter = '';
+            while (colIndex >= 0) {
+                letter = String.fromCharCode((colIndex % 26) + 65) + letter;
+                colIndex = Math.floor(colIndex / 26) - 1;
+            }
+            return letter;
+        }
+
+        function loadSelectedColumn() {
+            if (!globalExcelData) return;
+            const colIndex = parseInt(excelColumnSelect.value);
+            if (colIndex === -1) return; 
+            const textContent = globalExcelData.map(row => {
+                return row[colIndex] ? String(row[colIndex]).trim() : "";
+            }).filter(line => line.length > 0).join('\n');
+            inputNames.value = textContent;
+            processNames();
+        }
+
+        function downloadText() {
+            const text = resultArea.innerText;
+            if (!text || text.includes("Veri bekleniyor") || text.includes("Lütfen işleme devam etmek")) {
+                alert("İndirilecek geçerli veri yok!");
+                return;
+            }
+            const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "maskelenmis_liste.txt";
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function downloadExcel() {
+            const text = resultArea.innerText;
+            if (!text || text.includes("Veri bekleniyor") || text.includes("Lütfen işleme devam etmek")) {
+                alert("İndirilecek geçerli veri yok!");
+                return;
+            }
+            const lines = text.split('\n');
+            const data = lines.map(line => [line]); 
+            const wb = XLSX.utils.book_new();
+            const ws = XLSX.utils.aoa_to_sheet([["Maskelenmiş İsimler"], ...data]); 
+            XLSX.utils.book_append_sheet(wb, ws, "Maskelenmiş Liste");
+            XLSX.writeFile(wb, "maskelenmis_liste.xlsx");
+        }
+
+        // --- Formatting & Tools Utils (YENİ EKLENEN FONKSİYONLAR) ---
+
+        function changeCase(type) {
+            const text = inputNames.value;
+            if(!text) return;
+            if (type === 'upper') {
+                inputNames.value = text.toLocaleUpperCase('tr-TR');
+            } else if (type === 'lower') {
+                inputNames.value = text.toLocaleLowerCase('tr-TR');
+            } else if (type === 'title') {
+                inputNames.value = text.toLowerCase().split('\n').map(line => {
+                    return line.split(' ').map(word => 
+                        word.charAt(0).toLocaleUpperCase('tr-TR') + word.slice(1).toLocaleLowerCase('tr-TR')
+                    ).join(' ');
+                }).join('\n');
+            }
+            processNames();
+        }
+
+        // YENİ: Çift Kayıtları Temizle
+        function removeDuplicates() {
+            const text = inputNames.value;
+            if (!text) return;
+            
+            const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+            const uniqueLines = [...new Set(lines)];
+            
+            if (lines.length === uniqueLines.length) {
+                alert("Mükerrer kayıt bulunamadı.");
+            } else {
+                const removedCount = lines.length - uniqueLines.length;
+                inputNames.value = uniqueLines.join('\n');
+                processNames();
+                alert(`${removedCount} adet mükerrer kayıt temizlendi.`);
+            }
+        }
+
+        // YENİ: Sıralama
+        function sortInput(direction) {
+            const text = inputNames.value;
+            if (!text) return;
+            
+            let lines = text.split('\n').filter(l => l.trim().length > 0);
+            
+            if (direction === 'asc') {
+                lines.sort((a, b) => a.localeCompare(b, 'tr'));
+            } else {
+                lines.sort((a, b) => b.localeCompare(a, 'tr'));
+            }
+            
+            inputNames.value = lines.join('\n');
+            processNames();
+        }
+
+        function clearInput() {
+            if(confirm("Tüm veriyi silmek istediğine emin misin?")) {
+                inputNames.value = "";
+                columnSelectionArea.classList.add('hidden');
+                globalExcelData = null;
+                processNames();
+            }
+        }
+
+        function fillSampleData() {
+            columnSelectionArea.classList.add('hidden');
+            globalExcelData = null;
+            const samples = 
+`Ahmet Yılmaz
+Ayşe Demir
+Ahmet Yılmaz
+Fatma Nur Kara
+Mehmet Can Yıldız
+Mustafa Kemal Atatürk
+Ali Veli Hasan Hüseyin
+Zeynep Sude Çelik
+Oğuzhan Koç
+İbrahim Tatlıses
+Hüseyin Avni Sözen
+Abdurrahman Kahraman
+Efe Ak
+Su Naz`;
+            inputNames.value = samples;
+            processNames();
+        }
+
+        function copyResult() {
+            const text = resultArea.innerText;
+            if (!text || text.includes("Veri bekleniyor") || text.includes("Lütfen işleme devam etmek")) return;
+            
+            navigator.clipboard.writeText(text).then(() => {
+                const btn = document.getElementById('copyBtn');
+                const originalHtml = btn.innerHTML;
+                btn.innerHTML = '<i class="fa-solid fa-check"></i>';
+                btn.classList.replace('bg-green-600', 'bg-indigo-600');
+                setTimeout(() => {
+                    btn.innerHTML = originalHtml;
+                    btn.classList.replace('bg-indigo-600', 'bg-green-600');
+                }, 2000);
+            });
+        }
+    </script>
+</body>
+</html>
