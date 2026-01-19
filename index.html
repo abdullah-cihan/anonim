@@ -241,12 +241,36 @@
                         </div>
                     </div>
 
-                    <!-- Excel Warning -->
-                    <div id="columnSelectionArea" class="hidden bg-blue-50 border-b border-blue-100 px-4 py-2 animate-in">
-                        <div class="flex items-center gap-2">
-                            <span class="text-[10px] font-bold text-blue-700 bg-blue-100 px-1.5 rounded">XLSX</span>
-                            <select id="excelColumnSelect" onchange="loadSelectedColumn()" class="text-xs bg-white border-blue-200 text-slate-700 rounded-md py-1 pl-2 pr-6 focus:ring-1 focus:ring-blue-500 outline-none w-full sm:w-auto">
-                            </select>
+                    <!-- Excel Advanced Settings Panel -->
+                    <div id="columnSelectionArea" class="hidden bg-blue-50/80 border-b border-blue-100 px-4 py-3 animate-in backdrop-blur-sm">
+                        <div class="flex flex-col gap-3">
+                            <!-- Info Badge & Header Toggle -->
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-2 text-blue-700">
+                                    <i class="fa-solid fa-file-excel"></i>
+                                    <span class="text-xs font-bold">Excel Algılandı</span>
+                                </div>
+                                <label class="flex items-center gap-2 cursor-pointer group">
+                                    <input type="checkbox" id="hasHeaderRow" class="w-3.5 h-3.5 text-blue-600 rounded focus:ring-blue-500 border-gray-300" onchange="loadSelectedColumn()" checked>
+                                    <span class="text-[10px] font-semibold text-slate-500 group-hover:text-blue-600 transition-colors">İlk Satır Başlık</span>
+                                </label>
+                            </div>
+                            
+                            <!-- Selectors Row -->
+                            <div class="grid grid-cols-2 gap-3">
+                                <div class="relative">
+                                    <span class="absolute -top-2 left-2 px-1 bg-blue-50 text-[9px] font-bold text-blue-500 rounded">Sayfa (Sheet)</span>
+                                    <select id="excelSheetSelect" onchange="changeSheet()" class="w-full text-xs bg-white border border-blue-200 text-slate-700 rounded-lg py-1.5 pl-2 pr-6 focus:ring-2 focus:ring-blue-500 outline-none shadow-sm appearance-none cursor-pointer">
+                                    </select>
+                                    <i class="fa-solid fa-chevron-down absolute right-2 top-2 text-[10px] text-blue-300 pointer-events-none"></i>
+                                </div>
+                                <div class="relative">
+                                    <span class="absolute -top-2 left-2 px-1 bg-blue-50 text-[9px] font-bold text-blue-500 rounded">Sütun</span>
+                                    <select id="excelColumnSelect" onchange="loadSelectedColumn()" class="w-full text-xs bg-white border border-blue-200 text-slate-700 rounded-lg py-1.5 pl-2 pr-6 focus:ring-2 focus:ring-blue-500 outline-none shadow-sm appearance-none cursor-pointer">
+                                    </select>
+                                    <i class="fa-solid fa-chevron-down absolute right-2 top-2 text-[10px] text-blue-300 pointer-events-none"></i>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -347,6 +371,8 @@
         const fixedLengthMask = document.getElementById('fixedLengthMask');
         const randomMode = document.getElementById('randomMode');
 
+        // Global Variables for Excel Data
+        let globalWorkbook = null;
         let globalExcelData = null;
 
         // --- Event Listeners ---
@@ -493,13 +519,22 @@
                 const reader = new FileReader();
                 reader.onload = function(e) {
                     const data = new Uint8Array(e.target.result);
-                    const workbook = XLSX.read(data, {type: 'array'});
-                    const firstSheetName = workbook.SheetNames[0];
-                    const worksheet = workbook.Sheets[firstSheetName];
-                    const jsonData = XLSX.utils.sheet_to_json(worksheet, {header: 1});
-                    globalExcelData = jsonData;
-                    populateColumnSelector(jsonData);
-                    inputNames.value = "Excel dosyası başarıyla okundu.\n\nLütfen işleme devam etmek için yukarıdaki 'Excel Algılandı' panelinden bir sütun seçiniz...";
+                    globalWorkbook = XLSX.read(data, {type: 'array'});
+                    
+                    // Sayfa listesini doldur
+                    const sheetSelect = document.getElementById('excelSheetSelect');
+                    sheetSelect.innerHTML = '';
+                    globalWorkbook.SheetNames.forEach((name, index) => {
+                        const option = document.createElement('option');
+                        option.value = name;
+                        option.text = name;
+                        sheetSelect.appendChild(option);
+                    });
+
+                    // İlk sayfayı yükle
+                    changeSheet();
+                    
+                    inputNames.value = "Excel dosyası başarıyla okundu.\n\nLütfen işleme devam etmek için yukarıdaki panelden Sayfa ve Sütun seçiniz...";
                     processNames(); 
                 };
                 reader.readAsArrayBuffer(file);
@@ -508,12 +543,22 @@
                 reader.onload = function(e) {
                     columnSelectionArea.classList.add('hidden');
                     globalExcelData = null;
+                    globalWorkbook = null;
                     inputNames.value = e.target.result;
                     processNames();
                 };
                 reader.readAsText(file, "UTF-8");
             }
             input.value = '';
+        }
+
+        function changeSheet() {
+            if (!globalWorkbook) return;
+            const sheetName = document.getElementById('excelSheetSelect').value;
+            const worksheet = globalWorkbook.Sheets[sheetName];
+            globalExcelData = XLSX.utils.sheet_to_json(worksheet, {header: 1});
+            populateColumnSelector(globalExcelData);
+            loadSelectedColumn();
         }
 
         function populateColumnSelector(data) {
@@ -523,18 +568,19 @@
             for(let i=0; i<checkRows; i++){
                 if(data[i] && data[i].length > maxCols) maxCols = data[i].length;
             }
-            excelColumnSelect.innerHTML = '<option value="-1" selected disabled>-- Sütun Seçiniz --</option>';
+            excelColumnSelect.innerHTML = '<option value="-1" selected disabled>-- Seçiniz --</option>';
             for (let i = 0; i < maxCols; i++) {
                 const option = document.createElement('option');
                 option.value = i;
                 let headerName = "";
+                // Başlık varsa (ilk satır) göster
                 if (data[0] && data[0][i]) {
                     let val = String(data[0][i]);
                     if(val.length > 20) val = val.substring(0, 17) + "...";
                     headerName = ` (${val})`;
                 }
                 const colLetter = getExcelColLetter(i);
-                option.text = `Sütun ${colLetter}${headerName}`;
+                option.text = `${colLetter}${headerName}`;
                 excelColumnSelect.appendChild(option);
             }
             columnSelectionArea.classList.remove('hidden');
@@ -551,11 +597,22 @@
 
         function loadSelectedColumn() {
             if (!globalExcelData) return;
-            const colIndex = parseInt(excelColumnSelect.value);
-            if (colIndex === -1) return; 
-            const textContent = globalExcelData.map(row => {
+            const colIndex = parseInt(document.getElementById('excelColumnSelect').value);
+            const hasHeader = document.getElementById('hasHeaderRow').checked;
+            
+            if (colIndex === -1 || isNaN(colIndex)) return; 
+            
+            let dataToProcess = globalExcelData;
+            
+            // Eğer başlık satırı varsa ve veri dizisi doluysa ilk satırı atla
+            if (hasHeader && dataToProcess.length > 0) {
+                dataToProcess = dataToProcess.slice(1);
+            }
+
+            const textContent = dataToProcess.map(row => {
                 return row[colIndex] ? String(row[colIndex]).trim() : "";
             }).filter(line => line.length > 0).join('\n');
+            
             inputNames.value = textContent;
             processNames();
         }
@@ -648,6 +705,7 @@
                 inputNames.value = "";
                 columnSelectionArea.classList.add('hidden');
                 globalExcelData = null;
+                globalWorkbook = null;
                 processNames();
             }
         }
